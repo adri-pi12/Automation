@@ -1,0 +1,2 @@
+2026-09-27 18:51:52,451 - ERROR - ABC -> EUR, data 2025-05-01: The currency ABC is unknown
+2026-09-27 18:52:10,255 - ERROR - USD -> EUR, data 2026-01-01: Data trebuie să fie între 2025-01-01 și 2025-09-15.
