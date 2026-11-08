@@ -1,76 +1,49 @@
-# Lab 03 — Automatizarea scriptului Python cu cron și Docker
+# Laboratorul 03 — Automatizarea scriptului Python cu cron și Docker
 
-Autor: Pisari Adriana, grupa I2401.
+**Autor:** Pisari Adriana, grupa I2401
 
-## Scop
+## Scopul lucrării
 
-Scriptul din laboratorul 2 cere un curs valutar de la API și salvează răspunsul JSON.
-În laboratorul 3, cron pornește acest script automat într-un container Docker.
+În această lucrare am continuat proiectul `automation` din laboratorul 2. Am copiat fișierele din `lab02` în directorul `lab03` și am lucrat pe branch-ul `lab03`. Am configurat cron pentru a executa automat scriptul `currency_exchange_rate.py` într-un container Docker.
 
-| Programare | Câmpuri cron | Parametri transmiși scriptului |
+Am stabilit următoarele programări, în fusul orar `Europe/Chisinau`:
+
+| Sarcină | Programare cron | Data solicitată |
 | --- | --- | --- |
-| Zilnic, ora 06:00 | `0 6 * * *` | `MDL EUR` și data de ieri |
-| Vineri, ora 17:00 | `0 17 * * 5` | `MDL USD` și data de acum 7 zile |
+| Obținerea cursului MDL → EUR, zilnic la ora 06:00 | `0 6 * * *` | Ziua precedentă |
+| Obținerea cursului MDL → USD, vineri la ora 17:00 | `0 17 * * 5` | Data de acum 7 zile |
 
-Orele sunt în fusul `Europe/Chisinau`, inclusiv schimbarea sezonieră a orei.
-În această implementare, „previous week” înseamnă aceeași zi din săptămâna trecută,
-adică o dată cu 7 zile înaintea execuției. Scriptul lab02 acceptă o singură dată;
-nu calculează o medie săptămânală și nu cere toate zilele săptămânii.
+Pentru cerința „previous week”, am folosit aceeași zi din săptămâna precedentă, adică data de acum 7 zile, deoarece scriptul primește o singură dată la fiecare execuție.
 
-## 1. Pregătirea proiectului pe Mac
+## 1. Construirea și pornirea containerului cu cron
 
+### Pregătirea serviciului API
 
-
-```bash
-cd ~/Desktop/automation
-git status
-git switch -c lab03
-cp -R lab02 lab03
-```
-
-`git switch -c lab03` creează branch-ul și comută pe el. `cp -R` copiază fișierele
-laboratorului 2 în noul director.
-
- Arhiva conține deja copia scriptului din lab02 și toate
-adaptările descrise la punctul 7. Vechiul `README.md` al lab02 este înlocuit cu
-acest `readme.md`; pe macOS acestea reprezintă de obicei același nume de fișier.
-
-Verificăm rezultatul:
-
-```bash
-cd ~/Desktop/automation/lab03
-ls -la
-docker --version
-docker compose version
-```
-
-Nu este necesară activarea mediului `venv` de pe Mac: imaginea Docker are Python
-și dependențele sale proprii. Nu copiem mediul virtual al Mac-ului în imagine.
-
-## 2. Pornirea API-ului din laboratorul 2
-
-Containerul cron este un client al API-ului; API-ul trebuie pornit separat.
-Într-un alt Terminal, în directorul serviciului suport folosit la lab02:
+Am folosit Docker Desktop pe macOS și serviciul API din laboratorul 2. Pentru pornirea API-ului am executat următoarele comenzi în Terminal:
 
 ```bash
 cd ~/Desktop/lab02prep
 docker compose up -d
-docker compose ps
 ```
 
-Folosește locația actuală a serviciului dacă între timp l-ai mutat. API-ul trebuie
-să fie disponibil pe Mac la `http://localhost:8080`, ca în laboratorul 2.
-
-În directorul `automation/lab03`, creează configurația locală:
+Am verificat dacă API-ul răspunde pe portul `8080`:
 
 ```bash
-cp sample.env .env
-nano .env
+curl --max-time 10 -X POST "http://localhost:8080/?currencies" -d "key=EXAMPLE_API_KEY"
 ```
 
-În `nano`: salvezi cu **Control+O**, confirmi cu **Enter** și ieși cu **Control+X**.
-Păstrează cheia de test `EXAMPLE_API_KEY` dacă API-ul lab02 o folosește; dacă ai
-schimbat cheia, introdu valoarea actuală în `API_KEY`. Nu publica fișierul `.env`.
+Am primit un răspuns JSON cu lista valutelor și câmpul `error` gol. La prima încercare de conectare, API-ul era oprit. Am pornit containerul `php_apache`, după care cererea a reușit.
+
+### Configurarea variabilelor de mediu
+
+Am revenit în directorul laboratorului 3 și am creat configurația locală pe baza fișierului `sample.env`:
+
+```bash
+cd ~/Desktop/automation/lab03
+cp -n sample.env .env
+```
+
+Am folosit următoarele valori pentru API-ul de laborator:
 
 ```dotenv
 API_URL=http://host.docker.internal:8080
@@ -78,214 +51,170 @@ API_KEY=EXAMPLE_API_KEY
 TZ=Europe/Chisinau
 ```
 
-În Docker Desktop, `host.docker.internal` ajunge la Mac. În interiorul
-containerului, `localhost` ar indica acel container, nu API-ul pornit pe Mac.
-Compose transmite variabilele din `.env` prin `env_file`. Entrypoint-ul salvează
-doar variabilele necesare într-un fișier intern citit de fiecare sarcină cron.
+Am utilizat `host.docker.internal` pentru ca scriptul din container să ajungă la API-ul disponibil pe Mac. Am transmis variabilele prin opțiunea `env_file` din `docker-compose.yml`.
 
-## 3. Construirea și pornirea containerului cron
+În `entrypoint.sh`, am configurat fusul orar al containerului și am salvat variabilele necesare într-un fișier intern, `/run/cron-env.sh`. Am inclus citirea acestui fișier în comenzile cron, pentru ca scriptul să primească adresa API-ului și cheia de acces și la execuțiile automate.
 
-Execută în `~/Desktop/automation/lab03`:
+### Construirea imaginii și pornirea serviciului
+
+Am folosit imaginea oficială `python:3.12-slim-bookworm`, care include Python. În Dockerfile am prevăzut instalarea pachetelor `cron` și `tzdata`, precum și instalarea bibliotecii `requests` din `requirements.txt`.
+
+Din directorul `lab03`, am construit imaginea și am pornit containerul:
 
 ```bash
-docker compose config --quiet
 docker compose up -d --build
+```
+
+Prin `--build`, am cerut construirea imaginii folosind Dockerfile. Prin `-d`, am pornit containerul în fundal.
+
+Am verificat starea serviciului și mesajele de pornire:
+
+```bash
 docker compose ps
 docker compose logs --tail=30 currency-cron
 ```
 
-`--build` construiește imaginea folosind Dockerfile; `-d` lasă containerul să ruleze
-în fundal. Dockerfile instalează cron, baza de fusuri orare și biblioteca requests.
-Entrypoint-ul configurează ora, logurile și crontab-ul, pornește daemonul cron în
-fundal cu `/usr/sbin/cron` și lasă `tail` să urmărească logul în prim-plan.
-Astfel, containerul rămâne activ și mesajele apar în `docker compose logs`.
+Am observat că serviciul `currency-cron` avea starea `healthy`. În log au apărut mesajele „Cron configurat” și „Cron pornit în fundal”. Această verificare mi-a confirmat pornirea daemonului cron; pentru verificarea execuției scriptului am realizat testele de la punctul 2.
 
-Starea `healthy`, după aproximativ 30 de secunde, confirmă că procesul cron există;
-nu dovedește că API-ul răspunde sau că o sarcină a fost deja executată.
+În entrypoint am instalat sarcinile prin `crontab /app/lab03/cronjob` și am pornit daemonul cu `/usr/sbin/cron`. Am folosit `tail -n +1 -F /var/log/cron.log` în prim-plan pentru a menține containerul activ și pentru a afișa logul prin Docker Compose.
 
-## 4. Verificarea programării și a logurilor
+## 2. Verificarea sarcinilor cron și a fișierului de log
+
+### Verificarea programării instalate
+
+Am afișat sarcinile instalate:
+
+```bash
+docker compose exec currency-cron crontab -l
+```
+
+Am verificat prezența programărilor `0 6 * * *` și `0 17 * * 5`. În aceste expresii, am folosit ordinea: minut, oră, ziua lunii, lună și ziua săptămânii. Valoarea `5` din ultimul câmp indică ziua de vineri.
+
+Pentru verificarea separată a orei containerului pot folosi:
 
 ```bash
 docker compose exec currency-cron date
-docker compose exec currency-cron crontab -l
-docker compose exec currency-cron cat /var/log/cron.log
-docker compose logs -f currency-cron
 ```
 
-Prima comandă verifică ora containerului. A doua trebuie să arate cele două
-programări din `cronjob`. La pornire logul poate fi gol: sarcinile normale se
-execută la 06:00 și vineri la 17:00, fără o execuție automată imediată.
-Cu **Control+C** oprești doar urmărirea logurilor; containerul continuă să ruleze.
+Am calculat data fiecărei cereri la momentul execuției, folosind `date -d 'yesterday' +\%F`, respectiv `date -d '7 days ago' +\%F`, în containerul Linux. Am scris semnul procent ca `\%` în fișierul cron pentru a obține formatul datei fără interpretarea specială a caracterului de către cron.
 
-În `cronjob`, cele cinci câmpuri sunt: minut, oră, ziua lunii, luna, ziua săptămânii.
-`*` înseamnă orice valoare. În ultimul câmp, `5` înseamnă vineri.
+### Verificarea manuală a scriptului și a conexiunii
 
-Comenzile folosesc `date -d 'yesterday' +\%F` și `date -d '7 days ago' +\%F`.
-Data se calculează la fiecare execuție, în Linux-ul containerului. Nu executăm
-aceste comenzi GNU `date` direct în Terminalul macOS. În cron, `%` trebuie scris
-`\%`; altfel cron îl interpretează special, chiar dacă apare între ghilimele.
-
-`>> /var/log/cron.log 2>&1` adaugă atât ieșirea standard, cât și erorile în fișier.
-`python -u` trimite mesajele imediat, fără tamponarea ieșirii.
-Gruparea cu `{ ...; }` redirecționează și eventualele erori de configurare.
-
-Fișierul este instalat cu `crontab`, ca tabel al utilizatorului root. De aceea,
-liniile sale NU conțin un câmp suplimentar `root`. Nu instalăm aceleași sarcini
-și în `/etc/cron.d`, deoarece ar rula de două ori.
-
-## 5. Testarea fără să aștepți ora programată
-
-### Limita API-ului vechi
-
-API-ul utilizat la laboratorul 2 avea date doar pentru intervalul
-**2025-01-01 – 2025-09-15**. Programările normale cer ieri și data de acum 7 zile.
-Dacă aceste date nu există în API, vei vedea o eroare în log și nu se va crea JSON.
-Cron poate funcționa corect chiar dacă API-ul nu are cursul solicitat.
-Pentru cursuri actuale reușite este necesar un API/set de date actualizat care
-păstrează același contract HTTP; înlocuiești adresa prin `API_URL`, după caz.
-Scriptul nu inventează și nu înlocuiește automat datele cerute de programare.
-
-### 5.1. Test manual cu o dată istorică
+Am testat scriptul din container cu o dată disponibilă în API:
 
 ```bash
 docker compose exec currency-cron python -u currency_exchange_rate.py MDL EUR 2025-09-10
 ```
 
-Dacă API-ul este accesibil și are cursul, trebuie să apară mesajul de succes și
-fișierul `data/MDL_EUR_2025-09-10.json` pe Mac. Această comandă verifică scriptul
-și API-ul; nu constituie o execuție declanșată de cron și nu redirecționează în log.
-
-### 5.2. Test real prin cron, în fiecare minut
-
-Instalează temporar programarea de test:
+Am primit mesajul „Cererea a fost realizată cu succes”, iar rezultatul a fost salvat în `/app/data/MDL_EUR_2025-09-10.json`. Am verificat și fișierul de pe Mac:
 
 ```bash
-docker compose exec currency-cron crontab /app/lab03/cronjob.test
-docker compose exec currency-cron crontab -l
-```
-
-Așteaptă una-două minute, apoi verifică:
-
-```bash
-docker compose exec currency-cron tail -n 40 /var/log/cron.log
-docker compose exec currency-cron ls -l /app/data
 ls -l data
 ```
 
-`cronjob.test` pornește ambele conversii în fiecare minut, cu date istorice:
-MDL/EUR pentru `2025-09-10` și MDL/USD pentru `2025-09-08`.
-În log trebuie să apară marcajele `[TEST EUR]` și `[TEST USD]`, urmate de rezultatul
-real al scriptului. Mesajul de succes și cele două fișiere JSON confirmă și
-funcționarea API-ului; un mesaj de eroare trebuie analizat, nu raportat drept succes.
+Prin acest test am verificat scriptul, conexiunea la API și salvarea rezultatului. Pentru declanșarea automată am folosit programarea temporară de mai jos.
 
-**După verificare, restabilește obligatoriu programarea cerută:**
+### Testarea automată în fiecare minut
+
+Pentru a verifica execuția fără să aștept ora 06:00 sau ziua de vineri, am instalat temporar sarcinile din `cronjob.test`:
+
+```bash
+docker compose exec currency-cron crontab /app/lab03/cronjob.test
+```
+
+Am folosit două conversii cu date istorice disponibile în API:
+
+| Conversie de test | Data solicitată | Frecvență |
+| --- | --- | --- |
+| MDL → EUR | `2025-09-10` | În fiecare minut |
+| MDL → USD | `2025-09-08` | În fiecare minut |
+
+După una-două minute, am verificat ieșirea sarcinilor în fișierul cerut:
+
+```bash
+docker compose exec currency-cron tail -n 40 /var/log/cron.log
+```
+
+Am observat marcajele `[TEST EUR]` și `[TEST USD]` în minute succesive, urmate de mesajele de succes ale scriptului și de căile fișierelor JSON. Astfel, am confirmat că scriptul este pornit automat de cron și că rezultatele execuțiilor sunt scrise în `/var/log/cron.log`.
+
+Am verificat și cele două fișiere salvate pe Mac:
+
+```bash
+ls -l data
+```
+
+Am obținut fișierele `MDL_EUR_2025-09-10.json` și `MDL_USD_2025-09-08.json`, vizibile și în directorul local `lab03/data`.
+
+### Restabilirea programării finale
+
+După testare, am reinstalat fișierul `cronjob` și am verificat din nou conținutul:
 
 ```bash
 docker compose exec currency-cron crontab /app/lab03/cronjob
 docker compose exec currency-cron crontab -l
 ```
 
-Ultima ieșire trebuie să conțină `0 6 * * *` și `0 17 * * 5`.
-Fișierul normal `cronjob` nu este modificat de test. La recrearea/pornirea
-containerului, entrypoint-ul reinstalează tot programarea normală.
+Am confirmat revenirea la execuția zilnică la 06:00 și la execuția săptămânală de vineri, la 17:00.
 
-## 6. Structura proiectului și rolul fișierelor
+### Urmărirea logurilor
 
-Toate fișierele de mai jos sunt în `automation/lab03`.
+Pentru verificări ulterioare, am la dispoziție următoarele comenzi:
 
-| Fișier/director | Rol |
+```bash
+docker compose exec currency-cron cat /var/log/cron.log
+docker compose logs -f currency-cron
+```
+
+În sarcinile cron, am folosit redirecționarea `>> /var/log/cron.log 2>&1`. Prin `>>` adaug ieșirea la sfârșitul fișierului, iar prin `2>&1` trimit și mesajele de eroare în același loc. Am folosit opțiunea Python `-u` pentru afișarea imediată a mesajelor.
+
+Am legat `/var/log/cron.log` de `/app/logs/cron.log` și am montat directorul local `logs` în container. Astfel, pot consulta logul și pe Mac, în `lab03/logs/cron.log`. Cu `Control+C` pot opri urmărirea prin `docker compose logs -f`, în timp ce containerul continuă să ruleze.
+
+### Limita datelor disponibile în API
+
+Pentru testele reușite am folosit date istorice, deoarece API-ul laboratorului 2 conține cursuri pentru intervalul `2025-01-01`–`2025-09-15`. Am păstrat în programarea finală datele relative cerute: ieri și data de acum 7 zile. Pentru a obține cursuri și pentru date mai recente, am nevoie de un API sau de un set de date care le include. În cazul unei date indisponibile, pot verifica eroarea în log.
+
+## 3. Structura proiectului și rolul fișierelor
+
+Am organizat fișierele laboratorului în directorul `automation/lab03`:
+
+| Fișier sau director | Rol în proiect |
 | --- | --- |
-| `currency_exchange_rate.py` | Primește `FROM TO DATE`, cere cursul prin HTTP POST, salvează JSON și jurnalizează erorile. |
-| `requirements.txt` | Declară biblioteca externă requests; celelalte module folosite sunt din biblioteca standard Python. |
-| `cronjob` | Conține cele două programări cerute, cu date calculate dinamic. |
-| `entrypoint.sh` | Configurează fusul orar, variabilele cron și logurile; instalează sarcinile și pornește cron. |
-| `Dockerfile` | Construiește mediul Linux pe baza imaginii oficiale Python 3.12, cu cron și tzdata. |
-| `docker-compose.yml` | Construiește și pornește serviciul `currency-cron`, transmite configurația și montează directoarele persistente. |
-| `sample.env` | Model de configurație fără secrete reale. |
-| `.env` | Configurația locală, creată de utilizator și ignorată de Git/Docker build. |
-| `cronjob.test` | Programare temporară pentru verificare în fiecare minut cu date istorice. |
-| `.dockerignore` | Exclude configurația locală, mediul virtual, rezultatele și logurile din contextul de build. |
-| `.gitignore` | Exclude `.env`, mediile virtuale și fișierele generate din commit-uri. |
-| `readme.md` | Instrucțiunile de construire, rulare, verificare și explicațiile proiectului. |
-| `data/` | Apare la rulare; păstrează pe Mac fișierele JSON create în `/app/data`. |
-| `logs/cron.log` | Apare la rulare; păstrează ieșirea sarcinilor, accesibilă și ca `/var/log/cron.log`. |
-| `logs/error.log` | Apare la rulare; păstrează erorile Python, accesibile și ca `/app/error.log`. |
+| `currency_exchange_rate.py` | Am folosit scriptul pentru a primi valutele și data ca argumente, a trimite cererea HTTP POST către API, a salva răspunsul JSON și a înregistra erorile. |
+| `requirements.txt` | Am declarat biblioteca `requests`, necesară pentru comunicarea HTTP cu API-ul. |
+| `cronjob` | Am definit cele două sarcini finale: zilnic la 06:00 pentru MDL/EUR și vineri la 17:00 pentru MDL/USD. |
+| `cronjob.test` | Am definit sarcinile temporare care rulează în fiecare minut, cu date istorice, pentru verificarea execuției automate. |
+| `Dockerfile` | Am descris construirea imaginii, instalarea dependențelor, copierea fișierelor și folosirea entrypoint-ului. |
+| `entrypoint.sh` | Am configurat fusul orar, variabilele necesare cron, logurile și instalarea sarcinilor, apoi am pornit cron și urmărirea logului. |
+| `docker-compose.yml` | Am definit serviciul `currency-cron`, construirea imaginii, variabilele de mediu, volumele și politica de repornire. |
+| `sample.env` | Am păstrat un model cu adresa API-ului, cheia de test și fusul orar. |
+| `.env` | Am păstrat configurația locală transmisă containerului prin Compose. |
+| `.dockerignore` | Am exclus configurația locală, mediul virtual, logurile și rezultatele generate din contextul de construire a imaginii. |
+| `.gitignore` | Am exclus `.env`, mediile virtuale, logurile și rezultatele generate din fișierele adăugate în Git. |
+| `readme.md` | Am descris pornirea containerului, verificarea sarcinilor cron și rolul fișierelor proiectului. |
+| `data/` | Am păstrat pe Mac fișierele JSON create de script în `/app/data`. |
+| `logs/cron.log` | Am păstrat ieșirea sarcinilor cron, disponibilă în container la `/var/log/cron.log`. |
+| `logs/error.log` | Am păstrat erorile înregistrate de scriptul Python, disponibile în container și la `/app/error.log`. |
 
-În container, scriptul se află în `/app/lab03`; părintele său `/app` înlocuiește
-rădăcina repository-ului din lab02. Astfel sunt păstrate regulile originale pentru
-`data` și `error.log`. Legăturile simbolice și volumele fac rezultatele vizibile
-în directoarele `lab03/data` și `lab03/logs` de pe Mac.
-Aceste directoare persistă după `docker compose down`.
+În container, am plasat scriptul în `/app/lab03`. Am păstrat salvarea rezultatelor în directorul părinte al scriptului, astfel încât fișierele JSON sunt create în `/app/data`. Prin volumele definite în Compose, am făcut rezultatele și logurile accesibile și în directoarele locale `lab03/data` și `lab03/logs`.
 
-## 7. Modificări față de lab02
+## Oprirea și reluarea serviciului
 
-Am păstrat scriptul din repository-ul Automation și interfața `FROM TO DATE`.
-Adaptările din copia lab03 sunt:
-
-1. `API_URL` este citit din mediu, pentru conectarea containerului la API-ul de pe Mac.
-2. Validarea verifică formatul și existența datei; intervalul fix din 2025 a fost
-   eliminat din client. API-ul decide dacă are datele cerute. Eliminarea limitei
-   din client nu adaugă date noi în API.
-3. Scriptul întoarce codul `0` la succes și `1` la eroare, util la automatizare.
-4. `requirements.txt` declară requests și lasă pip să aleagă dependențe compatibile
-   cu Linux/Python 3.12, în locul listei exportate din mediul Mac.
-
-Directorul original `lab02` nu trebuie modificat.
-
-## 8. Oprire, reluare și salvare în Git
+Pentru oprirea serviciului cron pot folosi, din directorul `lab03`:
 
 ```bash
 docker compose down
+```
+
+Pentru reluarea execuției folosesc:
+
+```bash
 docker compose up -d
 ```
 
-Pentru modificări ale Dockerfile/scriptului/cronjob-ului, reconstruiește imaginea:
+După modificarea fișierelor copiate în imagine, reconstruiesc și repornesc serviciul:
 
 ```bash
 docker compose up -d --build
 ```
 
-Modificarea doar a `.env` necesită recrearea containerului:
-
-```bash
-docker compose up -d --force-recreate
-```
-
-Mac-ul și Docker Desktop trebuie să fie pornite la ora programată. Cron nu
-recuperează automat toate execuțiile ratate când containerul este oprit sau Mac-ul
-doarme. Politica `restart` ajută la reluare după repornirea Docker.
-
-Din rădăcina proiectului:
-
-```bash
-cd ~/Desktop/automation
-git status
-git add lab03
-git diff --cached --stat
-git commit -m "Add lab03 cron automation with Docker"
-git push -u origin lab03
-```
-
-Verifică înaintea commit-ului că `.env`, logurile și rezultatele generate nu sunt
-incluse. Branch-ul rămâne `lab03`; această cerință nu impune un merge în `main`.
-
-## 9. Dovezi de capturat la execuția pe Mac
-
-| Cerință | Verificare / captură |
-| --- | --- |
-| Branch și director lab03 | `git branch --show-current` și `ls lab03` din rădăcina proiectului. |
-| Imagine și container pornit | Finalul construirii și `docker compose ps`. |
-| Ora și cele două sarcini | `date` și `crontab -l` în container. |
-| Execuție reală prin cron | Marcajele TEST, ieșirea scriptului și JSON-urile, după instalarea temporară a `cronjob.test`. |
-| Scriere în fișierul cerut | `tail -n 40 /var/log/cron.log` în container. |
-| Programarea finală corectă | `crontab -l` după restabilirea fișierului `cronjob`. |
-
-Acestea sunt instrucțiuni și rezultate de verificat pe Mac; nu sunt dovezi că
-serviciul Docker sau API-ul tău au fost deja pornite în această sesiune.
-
-## 10. Documentație
-
-- [Debian: formatul crontab și regulile pentru `%`](https://manpages.debian.org/bookworm/cron/crontab.5.en.html)
-- [Debian: daemonul cron](https://manpages.debian.org/bookworm/cron/cron.8.en.html)
-- [Docker Desktop: accesul la serviciile gazdei](https://docs.docker.com/desktop/features/networking/networking-how-tos/)
-- [Docker Compose: variabile de mediu și env_file](https://docs.docker.com/compose/how-tos/environment-variables/set-environment-variables/)
+Pentru rularea la orele programate, păstrez Mac-ul și Docker Desktop pornite, containerul activ și API-ul accesibil. Dacă opresc containerul, la repornire cron continuă cu programările următoare.
