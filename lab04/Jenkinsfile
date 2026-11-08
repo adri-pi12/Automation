@@ -1,0 +1,39 @@
+pipeline {
+    agent {
+        label 'php-agent'
+    }
+
+    stages {
+        stage('Install Dependencies') {
+            steps {
+                echo 'Preparing project...'
+
+                deleteDir()
+
+                git branch: 'main',
+                    url: 'https://github.com/composer/semver.git'
+
+                sh 'composer install --no-interaction --prefer-dist --no-progress'
+            }
+        }
+
+        stage('Test') {
+            steps {
+                echo 'Running tests...'
+                sh 'composer test'
+            }
+        }
+    }
+
+    post {
+        always {
+            echo 'Pipeline completed.'
+        }
+        success {
+            echo 'All stages completed successfully!'
+        }
+        failure {
+            echo 'Errors detected in the pipeline.'
+        }
+    }
+}
