@@ -19,7 +19,7 @@ nu calculează o medie săptămânală și nu cere toate zilele săptămânii.
 
 ## 1. Pregătirea proiectului pe Mac
 
-Deschide Docker Desktop și așteaptă pornirea motorului Docker. Deschide Terminal.
+
 
 ```bash
 cd ~/Desktop/automation
@@ -29,16 +29,13 @@ cp -R lab02 lab03
 ```
 
 `git switch -c lab03` creează branch-ul și comută pe el. `cp -R` copiază fișierele
-laboratorului 2 în noul director. Dacă directorul `lab03` există deja, nu repeta
-comanda de copiere: aceasta poate crea un director imbricat `lab03/lab02`.
-Dacă branch-ul există deja, folosește `git switch lab03`.
+laboratorului 2 în noul director.
 
-Copiază apoi conținutul directorului `lab03` din arhiva pregătită peste fișierele
-din `automation/lab03`. Arhiva conține deja copia scriptului din lab02 și toate
+ Arhiva conține deja copia scriptului din lab02 și toate
 adaptările descrise la punctul 7. Vechiul `README.md` al lab02 este înlocuit cu
 acest `readme.md`; pe macOS acestea reprezintă de obicei același nume de fișier.
 
-Verifică rezultatul:
+Verificăm rezultatul:
 
 ```bash
 cd ~/Desktop/automation/lab03
