@@ -1,0 +1,9 @@
+SHELL=/bin/sh
+PATH=/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+MAILTO=""
+
+# Zilnic la 06:00: MDL -> EUR pentru ziua precedentă.
+0 6 * * * { . /run/cron-env.sh && cd /app/lab03 && echo "[DAILY] $(date -Iseconds)" && /usr/local/bin/python -u currency_exchange_rate.py MDL EUR "$(date -d 'yesterday' +\%F)"; } >> /var/log/cron.log 2>&1
+
+# Vineri la 17:00: MDL -> USD pentru data de acum 7 zile.
+0 17 * * 5 { . /run/cron-env.sh && cd /app/lab03 && echo "[WEEKLY] $(date -Iseconds)" && /usr/local/bin/python -u currency_exchange_rate.py MDL USD "$(date -d '7 days ago' +\%F)"; } >> /var/log/cron.log 2>&1

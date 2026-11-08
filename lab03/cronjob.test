@@ -1,0 +1,8 @@
+SHELL=/bin/sh
+PATH=/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+MAILTO=""
+
+# NUMAI pentru verificare: ambele sarcini rulează în fiecare minut.
+# Date istorice din intervalul acceptat de API-ul de la lab02.
+* * * * * { . /run/cron-env.sh && cd /app/lab03 && echo "[TEST EUR] $(date -Iseconds)" && /usr/local/bin/python -u currency_exchange_rate.py MDL EUR 2025-09-10; } >> /var/log/cron.log 2>&1
+* * * * * { . /run/cron-env.sh && cd /app/lab03 && echo "[TEST USD] $(date -Iseconds)" && /usr/local/bin/python -u currency_exchange_rate.py MDL USD 2025-09-08; } >> /var/log/cron.log 2>&1

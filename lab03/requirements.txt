@@ -1,0 +1,2 @@
+# Singura dependență externă a scriptului; pip instalează și dependențele ei.
+requests>=2.32,<3

@@ -1,0 +1,13 @@
+services:
+  currency-cron:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: automation-lab03
+    init: true
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    restart: unless-stopped
